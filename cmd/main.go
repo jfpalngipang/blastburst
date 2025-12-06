@@ -318,16 +318,48 @@ func normalizeNumber(num string) string {
 	return num
 }
 
+var allowedOrigins = map[string]bool{
+	"https://sms-admin-v1.vercel.app/sms-sender": true,
+	"http://localhost:4000":                      true,
+	"http://127.0.0.1:4000":                      true,
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		origin := r.Header.Get("Origin")
+		if allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+		}
+
+		// Handle OPTIONS preflight immediately
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// start workers first
 	for i := 0; i < 10; i++ {
 		go worker(i)
 	}
 
-	http.HandleFunc("/send-sms", sendSMSHandler)         // single JSON
-	http.HandleFunc("/batch-send", batchSendHandler)     // JSON batch
-	http.HandleFunc("/upload-batch", uploadBatchHandler) // CSV upload
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/send-sms", sendSMSHandler)
+	mux.HandleFunc("/batch-send", batchSendHandler)
+	mux.HandleFunc("/upload-batch", uploadBatchHandler)
+
+	handler := corsMiddleware(mux)
 
 	log.Println("REST SMS API running on :5000")
-	log.Fatal(http.ListenAndServe(":5000", nil))
+	log.Fatal(http.ListenAndServe(":5000", handler))
 }

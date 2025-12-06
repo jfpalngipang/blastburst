@@ -34,3 +34,4 @@ func newTransceiver(host, systemID, password, systemType string) *transceiver {
 	return &transceiver{trx: trx}
 
 }
+
